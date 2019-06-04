@@ -1,0 +1,10 @@
+{
+  "name": "node-demo",
+  "version": "1.0.0",
+  "description": "Node.js hello world demo",
+  "author": "OpsWorkshop ",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  }
+}
