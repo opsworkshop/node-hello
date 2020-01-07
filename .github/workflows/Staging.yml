@@ -1,0 +1,80 @@
+
+##   Manikandandn Nagappan
+##   Manikandandn@outlook.com 
+##   +91-9600495567
+
+name: CI-CD-Pipeline-to-AWS-ElasticBeanstalk
+env:
+  EB_PACKAGE_S3_BUCKET_NAME : "mani-gogo-node"
+  EB_APPLICATION_NAME       : "Mygogodemo"
+  EB_ENVIRONMENT_NAME       : "Mygogodemo-env"
+  DEPLOY_PACKAGE_NAME       : "Mygogodemo-${{ github.sha }}.zip"
+  AWS_REGION_NAME           : "ap-south-1"
+
+on: 
+  push:
+    branches: 
+      - master
+
+jobs:
+    my_ci_pipeline:
+       runs-on: ubuntu-latest
+       
+       steps:
+         - name: Git clone our repository
+           uses: actions/checkout@v1
+            
+         - name: Create ZIP deployment package
+           run : zip -r ${{ env.DEPLOY_PACKAGE_NAME }} ./  -x  *.git*
+           
+         - name: Configure my AWS Credentils
+           uses: aws-actions/configure-aws-credentials@v1
+           with:
+             aws-access-key-id    : ${{ secrets.MY_AWS_ACCESS_KEY }}
+             aws-secret-access-key: ${{ secrets.MY_AWS_SECRET_KEY }}
+             aws-region           : ${{ env.AWS_REGION_NAME }}
+
+         - name: Testing
+           uses: actions/setup-node@v1
+    
+         - name: Install dependencies
+           run: npm install
+         - name: Build Package
+           run: npm run build --if-present
+         - name: Running the test and Build the application
+           run: npm test
+           
+         - name: Copy our Deployment artifact to S3 bucket
+           run : aws s3 cp ${{ env.DEPLOY_PACKAGE_NAME }} s3://${{ env.EB_PACKAGE_S3_BUCKET_NAME}}/
+         
+         - name: Print message on completion of CI Pipeline
+           run : echo "CI Pipeline part finished successfully"
+           
+    my_cd_pipeline:
+
+       runs-on: ubuntu-latest
+       needs: [my_ci_pipeline]
+       
+       steps:
+         - name: Configure my AWS Credentils
+           uses: aws-actions/configure-aws-credentials@v1
+
+      ##Credentials are saved in GitHub under secrets section.
+           with:
+             aws-access-key-id    : ${{ secrets.MY_AWS_ACCESS_KEY }}
+             aws-secret-access-key: ${{ secrets.MY_AWS_SECRET_KEY }}
+             aws-region           : ${{ env.AWS_REGION_NAME }}
+         
+         - name: Create new ElasticBeanstalk Applicaiton Version
+           run : |
+            aws elasticbeanstalk create-application-version \
+            --application-name ${{ env.EB_APPLICATION_NAME }} \
+            --source-bundle S3Bucket="${{ env.EB_PACKAGE_S3_BUCKET_NAME }}",S3Key="${{ env.DEPLOY_PACKAGE_NAME }}" \
+            --version-label "Ver-${{ github.sha }}" \
+            --description "CommitSHA-${{ github.sha }}"
+            
+         - name: Deploy our new Application Version to Stating
+           run : aws elasticbeanstalk update-environment --environment-name ${{ env.EB_ENVIRONMENT_NAME }} --version-label "Ver-${{ github.sha }}"
+           
+         - name: Print message on completion of CD Pipeline
+           run : echo "CD Pipeline part finished successfully" 
